@@ -10,7 +10,7 @@ const PORT = 3002;
 app.use(express.json());
 
 const ordersFile = path.join(__dirname, 'orders.csv');
-const CATALOG_URL = 'http://localhost:3001';
+const CATALOG_URL = 'http://catalog:3001';
 
 function readOrders() {
     return new Promise((resolve, reject) => {
