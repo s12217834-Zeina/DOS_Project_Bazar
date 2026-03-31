@@ -1,0 +1,23 @@
+services:
+  catalog:
+    build: ./catalog
+    container_name: catalog_service
+    ports:
+      - "3001:3001"
+
+  order:
+    build: ./order
+    container_name: order_service
+    ports:
+      - "3002:3002"
+    depends_on:
+      - catalog
+
+  frontend:
+    build: ./frontend
+    container_name: frontend_service
+    ports:
+      - "3000:3000"
+    depends_on:
+      - catalog
+      - order

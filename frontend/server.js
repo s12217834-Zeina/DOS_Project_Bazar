@@ -6,13 +6,14 @@ const PORT = 3000;
 
 app.use(express.json());
 
-const CATALOG_URL = 'http://127.0.0.1:3001';
-const ORDER_URL = 'http://127.0.0.1:3002';
+const CATALOG_URL = 'http://catalog:3001';
+const ORDER_URL = 'http://order:3002';
 
 app.get('/search/:topic', async (req, res) => {
     try {
         const topic = req.params.topic;
-        const response = await axios.get(`${CATALOG_URL}/query/topic/${topic}`);
+        const encodedTopic = encodeURIComponent(topic);
+        const response = await axios.get(`${CATALOG_URL}/query/topic/${encodedTopic}`);
         console.log(`search request for topic: ${topic}`);
         res.json(response.data);
     } catch (error) {
