@@ -21,9 +21,15 @@ const db = new sqlite3.Database(dbPath, (err) => {
 
 app.post('/purchase/:id', async (req, res) => {
   const id = req.params.id;
+const quantity = Number(req.body?.quantity ?? 1);
 
-  console.log(`[Order] Purchase request received for item ${id}`);
+console.log(`[Order] Purchase request received for item ${id}, quantity: ${quantity}`);
 
+if (isNaN(quantity) || quantity <= 0) {
+  return res.status(400).json({
+    message: 'Invalid quantity value'
+  });
+}
   try {
     const catalogResponse = await axios.get(`${CATALOG_URL}/query/item/${id}`);
     const book = catalogResponse.data.item;
@@ -34,24 +40,24 @@ app.post('/purchase/:id', async (req, res) => {
       });
     }
 
-    if (book.quantity <= 0) {
-      return res.status(400).json({
-        message: 'Book is out of stock'
-      });
-    }
+    if (book.quantity < quantity) {
+    return res.status(400).json({
+    message: 'Not enough stock available'
+   });
+   }
 
     console.log(`[Order] Item ${id} is available. Proceeding with stock update`);
 
     const updateResponse = await axios.post(`${CATALOG_URL}/update/stock/${id}`, {
-      change: -1
+    change: -quantity
     });
 
     const orderedAt = new Date().toISOString();
 
     db.run(
-      `INSERT INTO orders (item_id, title, status, ordered_at)
-       VALUES (?, ?, ?, ?)`,
-      [book.id, book.title, 'SUCCESS', orderedAt],
+       `INSERT INTO orders (item_id, title, quantity, status, ordered_at)
+        VALUES (?, ?, ?, ?, ?)`,
+        [book.id, book.title, quantity, 'SUCCESS', orderedAt],
       function (err) {
         if (err) {
           console.error(`[Order] Failed to save order: ${err.message}`);
@@ -64,16 +70,17 @@ app.post('/purchase/:id', async (req, res) => {
         console.log(`[Order] Bought book: ${book.title}`);
 
         res.json({
-          message: 'Purchase completed successfully',
-          order: {
-            id: this.lastID,
-            item_id: book.id,
-            title: book.title,
-            status: 'SUCCESS',
-            ordered_at: orderedAt
-          },
-          stock: updateResponse.data.item
-        });
+        message: `Purchase completed successfully for ${quantity} cop${quantity > 1 ? 'ies' : 'y'}`,
+        order: {
+        id: this.lastID,
+        item_id: book.id,
+        title: book.title,
+        quantity,
+        status: 'SUCCESS',
+        ordered_at: orderedAt
+        },
+         stock: updateResponse.data.item
+      });
       }
     );
   } catch (error) {

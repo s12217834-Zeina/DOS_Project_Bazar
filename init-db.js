@@ -27,9 +27,10 @@ db.serialize(() => {
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       item_id INTEGER NOT NULL,
       title TEXT NOT NULL,
+      quantity INTEGER NOT NULL,
       status TEXT NOT NULL,
       ordered_at TEXT NOT NULL
-    )
+   )
   `);
 
   db.get(`SELECT COUNT(*) AS count FROM books`, (err, row) => {
