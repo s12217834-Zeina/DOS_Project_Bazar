@@ -6,51 +6,77 @@ const PORT = 3000;
 
 app.use(express.json());
 
-const CATALOG_URL = 'http://catalog:3001';
-const ORDER_URL = 'http://order:3002';
+const CATALOG_URL = process.env.CATALOG_URL || 'http://localhost:3001';
+const ORDER_URL = process.env.ORDER_URL || 'http://localhost:3002';
 
 app.get('/search/:topic', async (req, res) => {
-    try {
-        const topic = req.params.topic;
-        const encodedTopic = encodeURIComponent(topic);
-        const response = await axios.get(`${CATALOG_URL}/query/topic/${encodedTopic}`);
-        console.log(`search request for topic: ${topic}`);
-        res.json(response.data);
-    } catch (error) {
-        res.status(500).json({ error: 'Search failed' });
+  const topic = req.params.topic;
+
+  console.log(`[Frontend] Search request received for topic: ${topic}`);
+
+  try {
+    const response = await axios.get(`${CATALOG_URL}/query/topic/${encodeURIComponent(topic)}`);
+
+    res.json({
+      message: 'Search completed successfully',
+      items: response.data.items
+    });
+  } catch (error) {
+    if (error.response) {
+      return res.status(error.response.status).json(error.response.data);
     }
+
+    console.error(`[Frontend] Search failed: ${error.message}`);
+    res.status(500).json({
+      message: 'Search request failed'
+    });
+  }
 });
 
 app.get('/info/:id', async (req, res) => {
-    try {
-        const id = req.params.id;
-        const response = await axios.get(`${CATALOG_URL}/query/item/${id}`);
-        console.log(`info request for item: ${id}`);
-        res.json(response.data);
-    } catch (error) {
-        if (error.response && error.response.status === 404) {
-            return res.status(404).json({ error: 'Item not found' });
-        }
+  const id = req.params.id;
 
-        res.status(500).json({ error: 'Info request failed' });
+  console.log(`[Frontend] Info request received for item: ${id}`);
+
+  try {
+    const response = await axios.get(`${CATALOG_URL}/query/item/${id}`);
+
+    res.json({
+      message: 'Item details retrieved successfully',
+      item: response.data.item
+    });
+  } catch (error) {
+    if (error.response) {
+      return res.status(error.response.status).json(error.response.data);
     }
+
+    console.error(`[Frontend] Info request failed: ${error.message}`);
+    res.status(500).json({
+      message: 'Info request failed'
+    });
+  }
 });
 
 app.post('/purchase/:id', async (req, res) => {
-    try {
-        const id = req.params.id;
-        const response = await axios.post(`${ORDER_URL}/purchase/${id}`);
-        console.log(`purchase request for item: ${id}`);
-        res.json(response.data);
-    } catch (error) {
-        if (error.response) {
-            return res.status(error.response.status).json(error.response.data);
-        }
+  const id = req.params.id;
 
-        res.status(500).json({ error: 'Purchase request failed' });
+  console.log(`[Frontend] Purchase request received for item: ${id}`);
+
+  try {
+    const response = await axios.post(`${ORDER_URL}/purchase/${id}`);
+    res.json(response.data);
+  } catch (error) {
+    if (error.response) {
+      return res.status(error.response.status).json(error.response.data);
     }
+
+    console.error(`[Frontend] Purchase request failed: ${error.message}`);
+    res.status(500).json({
+      message: 'Purchase request failed'
+    });
+  }
 });
 
 app.listen(PORT, () => {
-    console.log(`Front-end server running on port ${PORT}`);
+  console.log(`[Frontend] Server running on port ${PORT}`);
 });

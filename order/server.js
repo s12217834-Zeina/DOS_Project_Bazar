@@ -1,6 +1,5 @@
 const express = require('express');
-const fs = require('fs');
-const csv = require('csv-parser');
+const sqlite3 = require('sqlite3').verbose();
 const path = require('path');
 const axios = require('axios');
 
@@ -9,76 +8,86 @@ const PORT = 3002;
 
 app.use(express.json());
 
-const ordersFile = path.join(__dirname, 'orders.csv');
-const CATALOG_URL = 'http://catalog:3001';
+const CATALOG_URL = process.env.CATALOG_URL || 'http://localhost:3001';
+const dbPath = process.env.DB_PATH || path.join(__dirname, '..', 'data', 'bazar.db');
 
-function readOrders() {
-    return new Promise((resolve, reject) => {
-        const orders = [];
-
-        fs.createReadStream(ordersFile)
-            .pipe(csv())
-            .on('data', (row) => orders.push(row))
-            .on('end', () => resolve(orders))
-            .on('error', (error) => reject(error));
-    });
-}
-
-function appendOrder(order) {
-    return new Promise((resolve, reject) => {
-        const row = `\n${order.order_id},${order.item_id},${order.title},${order.status},${order.timestamp}`;
-
-        fs.appendFile(ordersFile, row, (error) => {
-            if (error) {
-                reject(error);
-            } else {
-                resolve();
-            }
-        });
-    });
-}
+const db = new sqlite3.Database(dbPath, (err) => {
+  if (err) {
+    console.error(`[Order] Failed to connect to database: ${err.message}`);
+  } else {
+    console.log('[Order] Connected to SQLite database');
+  }
+});
 
 app.post('/purchase/:id', async (req, res) => {
-    try {
-        const id = req.params.id;
+  const id = req.params.id;
 
-        const catalogResponse = await axios.get(`${CATALOG_URL}/query/item/${id}`);
-        const book = catalogResponse.data;
+  console.log(`[Order] Purchase request received for item ${id}`);
 
-        if (book.quantity <= 0) {
-            return res.status(400).json({ error: 'Book is out of stock' });
+  try {
+    const catalogResponse = await axios.get(`${CATALOG_URL}/query/item/${id}`);
+    const book = catalogResponse.data.item;
+
+    if (!book) {
+      return res.status(404).json({
+        message: 'Item not found'
+      });
+    }
+
+    if (book.quantity <= 0) {
+      return res.status(400).json({
+        message: 'Book is out of stock'
+      });
+    }
+
+    console.log(`[Order] Item ${id} is available. Proceeding with stock update`);
+
+    const updateResponse = await axios.post(`${CATALOG_URL}/update/stock/${id}`, {
+      change: -1
+    });
+
+    const orderedAt = new Date().toISOString();
+
+    db.run(
+      `INSERT INTO orders (item_id, title, status, ordered_at)
+       VALUES (?, ?, ?, ?)`,
+      [book.id, book.title, 'SUCCESS', orderedAt],
+      function (err) {
+        if (err) {
+          console.error(`[Order] Failed to save order: ${err.message}`);
+          return res.status(500).json({
+            message: 'Failed to save order'
+          });
         }
 
-        await axios.post(`${CATALOG_URL}/update/stock/${id}`, {
-            change: -1
-        });
+        console.log(`[Order] Order saved successfully for item ${id}`);
+        console.log(`[Order] Bought book: ${book.title}`);
 
-        const orders = await readOrders();
-        const newOrder = {
-            order_id: orders.length + 1,
+        res.json({
+          message: 'Purchase completed successfully',
+          order: {
+            id: this.lastID,
             item_id: book.id,
             title: book.title,
             status: 'SUCCESS',
-            timestamp: new Date().toISOString()
-        };
-
-        await appendOrder(newOrder);
-
-        console.log(`bought book ${book.title}`);
-
-        res.json({
-            message: 'Purchase completed successfully',
-            order: newOrder
+            ordered_at: orderedAt
+          },
+          stock: updateResponse.data.item
         });
-    } catch (error) {
-        if (error.response && error.response.status === 404) {
-            return res.status(404).json({ error: 'Item not found' });
-        }
-
-        res.status(500).json({ error: 'Purchase failed' });
+      }
+    );
+  } catch (error) {
+    if (error.response) {
+      return res.status(error.response.status).json(error.response.data);
     }
+
+    console.error(`[Order] Purchase failed: ${error.message}`);
+    res.status(500).json({
+      message: 'Purchase failed'
+    });
+  }
 });
 
 app.listen(PORT, () => {
-    console.log(`Order server running on port ${PORT}`);
+  console.log(`[Order] Server running on port ${PORT}`);
 });
