@@ -1,10 +1,19 @@
-
 services:
   catalog:
     build: ./catalog
     container_name: bazar_catalog
     ports:
       - "3001:3001"
+    environment:
+      - DB_PATH=/app/data/bazar.db
+    volumes:
+      - ./data:/app/data
+
+  catalog2:
+    build: ./catalog
+    container_name: bazar_catalog2
+    ports:
+      - "3003:3001"
     environment:
       - DB_PATH=/app/data/bazar.db
     volumes:
@@ -23,6 +32,19 @@ services:
     volumes:
       - ./data:/app/data
 
+  order2:
+    build: ./order
+    container_name: bazar_order2
+    ports:
+      - "3004:3002"
+    depends_on:
+      - catalog2
+    environment:
+      - DB_PATH=/app/data/bazar.db
+      - CATALOG_URL=http://catalog2:3001
+    volumes:
+      - ./data:/app/data
+
   frontend:
     build: ./frontend
     container_name: bazar_frontend
@@ -30,8 +52,11 @@ services:
       - "3000:3000"
     depends_on:
       - catalog
+      - catalog2
       - order
+      - order2
     environment:
       - CATALOG_URL=http://catalog:3001
+      - CATALOG_URL_2=http://catalog2:3001
       - ORDER_URL=http://order:3002
-      
+      - ORDER_URL_2=http://order2:3002
