@@ -1,12 +1,14 @@
 const express = require('express');
 const sqlite3 = require('sqlite3').verbose();
 const path = require('path');
+const axios = require('axios');
 
 const app = express();
 const PORT = 3001;
 
 app.use(express.json());
 
+const FRONTEND_URL = process.env.FRONTEND_URL || 'http://frontend:3000';
 const dbPath = process.env.DB_PATH || path.join(__dirname, '..', 'data', 'bazar.db');
 
 const db = new sqlite3.Database(dbPath, (err) => {
@@ -16,6 +18,17 @@ const db = new sqlite3.Database(dbPath, (err) => {
     console.log('[Catalog] Connected to SQLite database');
   }
 });
+
+// Send cache invalidation request to frontend before any catalog write operation
+async function invalidateFrontendCache(itemId) {
+  try {
+    await axios.post(`${FRONTEND_URL}/invalidate/${itemId}`);
+
+    console.log(`[Catalog] Cache invalidation request sent for item ${itemId}`);
+  } catch (error) {
+    console.warn(`[Catalog] Cache invalidation failed for item ${itemId}: ${error.message}`);
+  }
+}
 
 app.get('/query/topic/:topic', (req, res) => {
   const topic = req.params.topic.toLowerCase();
@@ -28,6 +41,7 @@ app.get('/query/topic/:topic', (req, res) => {
     (err, rows) => {
       if (err) {
         console.error(`[Catalog] Failed to query by topic: ${err.message}`);
+
         return res.status(500).json({
           message: 'Failed to retrieve books by topic'
         });
@@ -52,6 +66,7 @@ app.get('/query/item/:id', (req, res) => {
     (err, row) => {
       if (err) {
         console.error(`[Catalog] Failed to query item: ${err.message}`);
+
         return res.status(500).json({
           message: 'Failed to retrieve item details'
         });
@@ -83,9 +98,10 @@ app.post('/update/stock/:id', (req, res) => {
     });
   }
 
-  db.get(`SELECT * FROM books WHERE id = ?`, [id], (err, book) => {
+  db.get(`SELECT * FROM books WHERE id = ?`, [id], async (err, book) => {
     if (err) {
       console.error(`[Catalog] Failed to read item before stock update: ${err.message}`);
+
       return res.status(500).json({
         message: 'Failed to retrieve item before stock update'
       });
@@ -105,12 +121,16 @@ app.post('/update/stock/:id', (req, res) => {
       });
     }
 
+    // Invalidate frontend cache before writing to database
+    await invalidateFrontendCache(id);
+
     db.run(
       `UPDATE books SET quantity = ? WHERE id = ?`,
       [newQuantity, id],
       function (updateErr) {
         if (updateErr) {
           console.error(`[Catalog] Failed to update stock: ${updateErr.message}`);
+
           return res.status(500).json({
             message: 'Failed to update stock'
           });
@@ -120,6 +140,7 @@ app.post('/update/stock/:id', (req, res) => {
 
         res.json({
           message: 'Stock updated successfully',
+          cacheInvalidated: true,
           item: {
             id: book.id,
             title: book.title,
@@ -143,34 +164,50 @@ app.post('/update/price/:id', (req, res) => {
     });
   }
 
-  db.run(
-    `UPDATE books SET price = ? WHERE id = ?`,
-    [price, id],
-    function (err) {
-      if (err) {
-        console.error(`[Catalog] Failed to update price: ${err.message}`);
-        return res.status(500).json({
-          message: 'Failed to update price'
-        });
-      }
+  db.get(`SELECT * FROM books WHERE id = ?`, [id], async (readErr, book) => {
+    if (readErr) {
+      console.error(`[Catalog] Failed to read item before price update: ${readErr.message}`);
 
-      if (this.changes === 0) {
-        return res.status(404).json({
-          message: 'Item not found'
-        });
-      }
-
-      console.log(`[Catalog] Price updated successfully for item ${id}. New price: ${price}`);
-
-      res.json({
-        message: 'Price updated successfully',
-        item: {
-          id: Number(id),
-          price
-        }
+      return res.status(500).json({
+        message: 'Failed to retrieve item before price update'
       });
     }
-  );
+
+    if (!book) {
+      return res.status(404).json({
+        message: 'Item not found'
+      });
+    }
+
+    // Invalidate frontend cache before writing to database
+    await invalidateFrontendCache(id);
+
+    db.run(
+      `UPDATE books SET price = ? WHERE id = ?`,
+      [price, id],
+      function (err) {
+        if (err) {
+          console.error(`[Catalog] Failed to update price: ${err.message}`);
+
+          return res.status(500).json({
+            message: 'Failed to update price'
+          });
+        }
+
+        console.log(`[Catalog] Price updated successfully for item ${id}. New price: ${price}`);
+
+        res.json({
+          message: 'Price updated successfully',
+          cacheInvalidated: true,
+          item: {
+            id: Number(id),
+            title: book.title,
+            price
+          }
+        });
+      }
+    );
+  });
 });
 
 app.listen(PORT, () => {

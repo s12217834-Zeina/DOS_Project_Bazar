@@ -6,6 +6,8 @@ services:
       - "3001:3001"
     environment:
       - DB_PATH=/app/data/bazar.db
+      - FRONTEND_URL=http://frontend:3000
+
     volumes:
       - ./data:/app/data
 
@@ -16,6 +18,9 @@ services:
       - "3003:3001"
     environment:
       - DB_PATH=/app/data/bazar.db
+      - FRONTEND_URL=http://frontend:3000
+
+      
     volumes:
       - ./data:/app/data
 
