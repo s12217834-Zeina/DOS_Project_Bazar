@@ -34,3 +34,4 @@ services:
     environment:
       - CATALOG_URL=http://catalog:3001
       - ORDER_URL=http://order:3002
+      

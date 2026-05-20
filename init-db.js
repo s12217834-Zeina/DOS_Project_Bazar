@@ -33,6 +33,16 @@ db.serialize(() => {
    )
   `);
 
+  db.run(`
+  ALTER TABLE orders ADD COLUMN quantity INTEGER NOT NULL DEFAULT 1
+`, (err) => {
+  if (err && !err.message.includes('duplicate column name')) {
+    console.error('Error adding quantity column:', err.message);
+  } else {
+    console.log('Quantity column checked/added successfully');
+  }
+});
+
   db.get(`SELECT COUNT(*) AS count FROM books`, (err, row) => {
     if (err) {
       console.error('Error checking books table:', err.message);
@@ -50,6 +60,10 @@ db.serialize(() => {
       stmt.run(3, 'Xen and the Art of Surviving Undergraduate School', 'undergraduate school', 6, 45);
       stmt.run(4, 'Cooking for the Impatient Undergrad', 'undergraduate school', 12, 30);
 
+      stmt.run(5, 'How to finish Project 3 on time', 'distributed systems', 10, 55);
+      stmt.run(6, 'Why theory classes are so hard.', 'undergraduate school', 10, 35);
+      stmt.run(7, 'Spring in the Pioneer Valley', 'undergraduate school', 10, 25);
+      
       stmt.finalize((finalizeErr) => {
         if (finalizeErr) {
           console.error('Error finalizing statement:', finalizeErr.message);
