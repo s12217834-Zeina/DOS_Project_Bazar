@@ -29,6 +29,7 @@ services:
     environment:
       - DB_PATH=/app/data/bazar.db
       - CATALOG_URL=http://catalog:3001
+      - FRONTEND_URL=http://frontend:3000
     volumes:
       - ./data:/app/data
 
@@ -42,6 +43,7 @@ services:
     environment:
       - DB_PATH=/app/data/bazar.db
       - CATALOG_URL=http://catalog2:3001
+      - FRONTEND_URL=http://frontend:3000
     volumes:
       - ./data:/app/data
 
